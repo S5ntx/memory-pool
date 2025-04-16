@@ -1,0 +1,3 @@
+/home/stx_u/memory-pool/v1/build/CMakeFiles/MemoryPoolProject.dir
+/home/stx_u/memory-pool/v1/build/CMakeFiles/edit_cache.dir
+/home/stx_u/memory-pool/v1/build/CMakeFiles/rebuild_cache.dir

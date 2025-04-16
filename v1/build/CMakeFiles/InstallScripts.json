@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/stx_u/memory-pool/v1/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
