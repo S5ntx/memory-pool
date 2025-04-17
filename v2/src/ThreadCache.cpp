@@ -19,7 +19,7 @@ void* ThreadCache::allocate(size_t size)
     }
 
     size_t index = SizeClass::getIndex(size);
-    
+     
     // 更新自由链表大小
     freeListSize_[index]--;
     
@@ -28,6 +28,19 @@ void* ThreadCache::allocate(size_t size)
     if (void* ptr = freeList_[index])
     {
         freeList_[index] = *reinterpret_cast<void**>(ptr); // 将freeList_[index]指向的内存块的下一个内存块地址（取决于内存块的实现）
+        // 这里的 ptr 原本是 void* 类型的指针，意味着它指向一个不确定类型的数据 
+        // 编译器无法知道该指针实际上指向什么类型的数据
+        // 而 reinterpret_cast<void**>(ptr) 将它转换为 void** 类型，意味着你将 ptr 视为一个指向指针的指针 我们需要访问 ptr 所指向的内存块中的 next 字段。
+        // 通过解引用转换后的指针，我们能够得到 ptr 所指向的内存块中的 next 字段，即下一个内存块的地址
+
+        /*
+            为什么不能直接访问 ptr->next?
+            在 ptr 是 void* 类型时， void* 是不具备成员访问操作的。                       freeList_ 中的每个指针并不知道自己指向的是什么类型
+            编译器不知道 ptr 实际指向的是一个什么类型的数据结构，所以不能直接访问 next 字段
+            必须通过类型转换，告诉编译器 ptr 实际上指向的是一个包含 next 字段的结构体（比如 BlockHeader）
+
+        */
+        
         return ptr;
     }
     
@@ -46,7 +59,8 @@ void ThreadCache::deallocate(void* ptr, size_t size)
     size_t index = SizeClass::getIndex(size);
 
     // 插入到线程本地自由链表
-    *reinterpret_cast<void**>(ptr) = freeList_[index];
+    *reinterpret_cast<void**>(ptr) = freeList_[index]; // 将 freeList_[index] 指向的内存块地址存储到 ptr 指向的内存块的 next 字段中。
+    
     freeList_[index] = ptr;
 
     // 更新自由链表大小
@@ -112,11 +126,20 @@ void ThreadCache::returnToCentralCache(void* start, size_t size)
 
     // 将内存块串成链表
     char* current = static_cast<char*>(start);
+    // 通过将 void* 转换为 char*，你可以按字节访问内存
+
     // 使用对齐后的大小计算分割点
-    char* splitNode = current;
+    char* splitNode = current;                                   //splitNode 初始时是指向一个内存块的指针（char*）
     for (size_t i = 0; i < keepNum - 1; ++i) 
     {
-        splitNode = reinterpret_cast<char*>(*reinterpret_cast<void**>(splitNode));
+        splitNode = reinterpret_cast<char*>(*reinterpret_cast<void**>(splitNode)); 
+        // 首先把 splitNode 强制转换为 void** 类型，也就是将 splitNode 当作一个指向 void* 的指针。
+        // 这样，我们可以间接地访问 splitNode 指向位置的内存地址。
+
+        // *reinterpret_cast<void**>(splitNode)：通过解引用后，取得 splitNode 指向内存位置的内容，也就是它所指向的下一个内存块的地址。
+
+        // reinterpret_cast<char*>(...)：然后将这个地址再转换回 char* 类型，表示下一个内存块的位置。
+
         if (splitNode == nullptr) 
         {
             // 如果链表提前结束，更新实际的返回数量
