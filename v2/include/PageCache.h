@@ -35,8 +35,10 @@ private:
         size_t numPages; // 页数
         Span*  next;     // 链表指针
     };
-
-    // 按页数管理空闲span，不同页数对应不同Span链表
+    /*
+      // 按页数管理空闲span，不同页数对应不同Span链表
+        freeSpans_ 是一个映射（std::map），其键（size_t）表示空闲内存块的页数，值（Span*）表示对应的 Span 对象
+    */
     std::map<size_t, Span*> freeSpans_;
     // 页号到span的映射，用于回收
     std::map<void*, Span*> spanMap_;

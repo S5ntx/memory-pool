@@ -114,6 +114,10 @@ void CentralCache::returnRange(void* start, size_t size, size_t index)
     // 当索引大于等于FREE_LIST_SIZE时，说明内存过大应直接向系统归还
     if (!start || index >= FREE_LIST_SIZE) 
         return;
+    /*
+        // start 是一个 void* 类型的指针，它表示待归还内存块的起始地址。如果 start 为 nullptr，说明没有有效的内存块需要归还
+
+    */
 
     while (locks_[index].test_and_set(std::memory_order_acquire)) 
     {
