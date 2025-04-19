@@ -28,11 +28,13 @@ void* ThreadCache::allocate(size_t size)
     if (void* ptr = freeList_[index])
     {
         freeList_[index] = *reinterpret_cast<void**>(ptr); // 将freeList_[index]指向的内存块的下一个内存块地址（取决于内存块的实现）
-        // 这里的 ptr 原本是 void* 类型的指针，意味着它指向一个不确定类型的数据 
-        // 编译器无法知道该指针实际上指向什么类型的数据
-        // 而 reinterpret_cast<void**>(ptr) 将它转换为 void** 类型，意味着你将 ptr 视为一个指向指针的指针 我们需要访问 ptr 所指向的内存块中的 next 字段。
-        // 通过解引用转换后的指针，我们能够得到 ptr 所指向的内存块中的 next 字段，即下一个内存块的地址
-
+        /*
+            // 这里的 ptr 原本是 void* 类型的指针，意味着它指向一个不确定类型的数据 
+            // 编译器无法知道该指针实际上指向什么类型的数据
+            // 而 reinterpret_cast<void**>(ptr) 将它转换为 void** 类型，意味着你将 ptr 视为一个指向指针的指针 我们需要访问 ptr 所指向的内存块中的 next 字段。
+            // 通过解引用转换后的指针，我们能够得到 ptr 所指向的内存块中的 next 字段，即下一个内存块的地址
+        */
+       
         /*
             为什么不能直接访问 ptr->next?
             在 ptr 是 void* 类型时， void* 是不具备成员访问操作的。                       freeList_ 中的每个指针并不知道自己指向的是什么类型
