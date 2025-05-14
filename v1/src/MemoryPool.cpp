@@ -1,7 +1,10 @@
 #include "../include/MemoryPool.h"
-// #include "MemoryPool.h"：默认查找当前目录下的文件。
-// #include "../include/MemoryPool.h"：查找当前目录的父目录中的 include 文件夹下的 MemoryPool.h 文件。
-// ..：表示“当前目录的父目录”
+/*
+   // #include "MemoryPool.h"：默认查找当前目录下的文件。
+   // #include "../include/MemoryPool.h"：查找当前目录的父目录中的 include 文件夹下的 MemoryPool.h 文件。
+   // ..：表示“当前目录的父目录”
+*/
+
 namespace Kama_memoryPool 
 {
 MemoryPool::MemoryPool(size_t BlockSize)
@@ -12,7 +15,10 @@ MemoryPool::MemoryPool(size_t BlockSize)
     , freeList_ (nullptr)         // 指向空闲的槽(被使用过后又被释放的槽)
     , lastSlot_ (nullptr)         // 作为当前内存块中最后能够存放元素的位置标识(超过该位置需申请新的内存块)
 {}
-
+/* 
+   如果成员变量是在构造时立即需要初始化的，通常会在构造函数的初始化列表中进行初始化。
+   如果成员变量在后续的成员函数中会根据某些条件进行初始化，构造函数就不需要显式初始化它们
+*/
 MemoryPool::~MemoryPool()
 {
     // 把连续的block删除
@@ -20,11 +26,13 @@ MemoryPool::~MemoryPool()
     while (cur)
     {
         Slot* next = cur->next;
+        operator delete(reinterpret_cast<void*>(cur));
+        /*
         // 等同于 free(reinterpret_cast<void*>(firstBlock_));
         // 转化为 void 指针，因为 void 类型不需要调用析构函数，只释放空间
-        operator delete(reinterpret_cast<void*>(cur));
         // 顺着 next 遍历所有 block 把每一个 cur 转成 void*，然后 operator delete()；
         // 这些块里不需要调用析构函数，因为你用的是原始内存块（不是 new 出来的对象数组）
+        */
         cur = next;
     }
 }
@@ -87,7 +95,13 @@ void MemoryPool::allocateNewBlock()
 
     // 超过该标记位置，则说明该内存块已无内存槽可用，需向系统申请新的内存块
     lastSlot_ = reinterpret_cast<Slot*>(reinterpret_cast<size_t>(newBlock) + BlockSize_ - SlotSize_ + 1);
+    /*
+    // BlockSize_ - SlotSize_ 是倒数第二个槽的起始位置。
 
+    // 如果你想让 lastSlot_ 指向 最后一个槽的结束位置，就需要再加上 +1。
+    // 实际上，+1 是一个精确的偏移量，指向槽结束后的那个位置（即内存块的边界）。
+    */
+ 
     freeList_ = nullptr;
 
     // reinterpret_cast 用于操作裸内存
@@ -116,9 +130,8 @@ bool MemoryPool::pushFreeList(Slot* slot)
         {
             return true;
         }
-        // 多线程访问 + 至少有一个写操作，就叫数据竞争（data race），就需要用同步手段来保障“看到的数据是对的”
-
-
+        /*
+        
         //.compare_exchange_weak(old, new)： 如果当前值 == old → 改成 new → 返回 true； 否则 → 返回 false；
         // 经典的 CAS（Compare-And-Swap）操作！
 
@@ -130,6 +143,8 @@ bool MemoryPool::pushFreeList(Slot* slot)
 
         // 失败：说明另一个线程可能已经修改了 freeList_
         // CAS 失败则重试
+        */
+       
     }
 }
 
@@ -139,7 +154,12 @@ Slot* MemoryPool::popFreeList()
     while (true)
     {
         Slot* oldHead = freeList_.load(std::memory_order_acquire); 
-        // acquire 确保“后面所有读操作”必须在它之后执行；
+        /*
+           // acquire 确保“后面所有读操作”必须在它之后执行；
+           std::atomic::load 是 C++ 中的一个函数，用于读取 std::atomic 对象的值。
+           这个函数会以原子方式读取存储的值，这意味着在多线程环境中，这个操作是线程安全的。
+        */
+        
         if (oldHead == nullptr)
             return nullptr; // 队列为空
 
@@ -148,6 +168,10 @@ Slot* MemoryPool::popFreeList()
         try                              // try 块用来捕获可能会抛出的异常
         {
             newHead = oldHead->next.load(std::memory_order_relaxed);
+            /*
+                oldHead->next.load(std::memory_order_relaxed) 这行代码本身是不会抛出异常的。
+                但是，如果 oldHead 为空或指向无效内存，这可能会导致其他异常或错误（如内存访问错误）
+            */
         }
         catch(...)                       // catch 块用来处理这些异常 ... 捕获所有类型的异常
         {
@@ -161,9 +185,20 @@ Slot* MemoryPool::popFreeList()
          std::memory_order_acquire, std::memory_order_relaxed))
         {
             return oldHead;
+            /*
+                compare_exchange_weak 是一种 原子比较并交换（CAS，Compare-and-Swap）操作。它尝试将 freeList_ 的当前值（oldHead）替换为 newHead
+                只有在 freeList_ 的当前值与 oldHead 相等时，操作才会成功。也就是说，如果 freeList_ 的当前值等于 oldHead，那么它会被替换成 newHead
+                
+            */
         }
-        // 失败：说明另一个线程可能已经修改了 freeList_
-        // CAS 失败则重试
+        /*
+           // 失败：说明另一个线程可能已经修改了 freeList_
+           // CAS 失败则重试
+           如果 compare_exchange_weak 失败了，说明其他线程已经修改了 freeList_ 的值，这可能意味着 oldHead 变得过时或者被其他线程修改了。
+           在这种情况下，程序会重新开始整个过程，重新读取 freeList_，获取新的 oldHead，然后再尝试一次。换句话说，如果 CAS 操作失败，你会重新执行 while (true) 循环中的操作，重新尝试直到成功为止。
+           这是一个典型的“自旋锁”机制，持续不断地进行尝试，直到更新成功。
+        */
+        
     }
 }
 
@@ -180,16 +215,19 @@ void HashBucket::initMemoryPool()
 MemoryPool& HashBucket::getMemoryPool(int index)
 {
     static MemoryPool memoryPool[MEMORY_POOL_NUM];
-    // static 保证内存池的唯一性与持续性  创建并初始化 memoryPool[] 后续所有调用：都使用这个已经初始化好的那一份
-    // 静态局部变量，只初始化一次，在整个程序运行期间全局保留 
-    // 声明了一个MemoryPool 对象的数组，数组长度是常量 MEMORY_POOL_NUM
+    /*
+       // static 保证内存池的唯一性与持续性  创建并初始化 memoryPool[] 后续所有调用：都使用这个已经初始化好的那一份
+       // 静态局部变量，只初始化一次，在整个程序运行期间全局保留 
+       // 声明了一个MemoryPool 对象的数组，数组长度是常量 MEMORY_POOL_NUM
 
-
-    // 整个 memoryPool[] 这块静态数组，只有第一次调用 getMemoryPool() 函数时才创建，整个程序运行期间只构造一次
-    // 不是 一上来程序启动就分配
+       // 整个 memoryPool[] 这块静态数组，只有第一次调用 getMemoryPool() 函数时才创建，整个程序运行期间只构造一次
+       // 不是 一上来程序启动就分配
+    */
+   
     return memoryPool[index];
 
-    /*                    // 按需构造第 N 个池子
+    /*                   
+     // 按需构造第 N 个池子
     static std::unique_ptr<MemoryPool> memoryPools[64];
 
     if (!memoryPools[index]) {
